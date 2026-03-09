@@ -12,13 +12,60 @@ const std::set<std::string> MEDIA_EXTENSIONS = {
     ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".mpeg", ".mpg"
 };
 
+std::string getExtension(const fs::path &path) {
+    std::string ext = path.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext;
+}
+
+std::vector<fs::path> renameToTemp(const std::vector<fs::path> &filePaths, const fs::path &dirPath) {
+    std::vector<fs::path> tempFilePaths;
+    int counter = 1;
+    for (auto const &file: filePaths) {
+        std::string newName = "tmp_" + std::to_string(counter) + getExtension(file);
+        fs::path newPath = dirPath / newName;
+
+        if (fs::exists(newPath) && newPath != file) {
+            std::cout << "[SKIP] " << file.filename().string() << " -> " << newName << " (already exists)\n";
+            counter++;
+            continue;
+        }
+
+        if (newPath == file) {
+            std::cout << "[OK]   " << file.filename().string() << " (already correct)\n";
+            counter++;
+            continue;
+        }
+
+        try {
+            tempFilePaths.push_back(newPath);
+            fs::rename(file, newPath);
+            std::cout << "[OK]   " << file.filename().string()
+                    << " -> " << newName << "\n";
+        } catch (const fs::filesystem_error &e) {
+            std::cerr << "[ERR]  " << file.filename().string()
+                    << ": " << e.what() << "\n";
+        }
+        counter++;
+    }
+    return tempFilePaths;
+}
+
+void renameToFinal(const std::vector<fs::path> &filePaths, const fs::path &dirPath) {
+    int counter = 1;
+    for (auto const &file: filePaths) {
+        std::string newName = "img_" + std::to_string(counter) + getExtension(file);
+        fs::path newPath = dirPath / newName;
+
+        fs::rename(file, newPath);
+        counter++;
+    }
+}
+
 void processDirectory(const fs::path &dirPath) {
     std::vector<fs::path> filePaths;
     for (auto const &entry: fs::directory_iterator(dirPath)) {
-        std::string extension = entry.path().extension().string();
-        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-
-        if (entry.is_regular_file() && MEDIA_EXTENSIONS.count(extension) > 0) {
+        if (entry.is_regular_file() && MEDIA_EXTENSIONS.count(getExtension(entry)) > 0) {
             filePaths.push_back(entry.path());
         }
     }
@@ -27,63 +74,23 @@ void processDirectory(const fs::path &dirPath) {
         return fs::last_write_time(a) < fs::last_write_time(b);
     });
 
-    std::vector<fs::path> tempFilePaths;
-    int counter = 1;
-    for (auto const &sortedFile: filePaths) {
-        std::string ext = sortedFile.extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    const std::vector<fs::path> tempFilePaths = renameToTemp(filePaths, dirPath);
+    renameToFinal(tempFilePaths, dirPath);
 
-        std::string newName = "tmp_" + std::to_string(counter) + ext;
-        fs::path newPath = dirPath / newName;
-
-
-        if (fs::exists(newPath) && newPath != sortedFile) {
-            std::cout << "[SKIP] " << sortedFile.filename().string() << " -> " << newName << " (already exists)\n";
-            counter++;
-            continue;
+    for (auto const &entry : fs::directory_iterator(dirPath)) {
+        if (entry.is_directory()) {
+            processDirectory(entry.path());
         }
-
-        if (newPath == sortedFile) {
-            std::cout << "[OK]   " << sortedFile.filename().string() << " (already correct)\n";
-            counter++;
-            continue;
-        }
-
-
-        try {
-            tempFilePaths.push_back(newPath);
-            fs::rename(sortedFile, newPath);
-            std::cout << "[OK]   " << sortedFile.filename().string()
-                    << " -> " << newName << "\n";
-        } catch (const fs::filesystem_error &e) {
-            std::cerr << "[ERR]  " << sortedFile.filename().string()
-                    << ": " << e.what() << "\n";
-        }
-
-        counter++;
-    }
-
-    counter = 1;
-    for (auto const &tempFile: tempFilePaths) {
-        std::string ext = tempFile.extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-
-        std::string newName = "img_" + std::to_string(counter) + ext;
-        fs::path newPath = dirPath / newName;
-
-        fs::rename(tempFile, newPath);
-        counter++;
     }
 }
 
-int main(int argc, char* argv[]) {
+int main(const int argc, char *argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: file_renamer <directory path>\n";
         return 1;
     }
     const fs::path directoryPath = argv[1]; // Directory path
 
-    std::cout << "[INFO] " << argv[1] << "\n";
     processDirectory(directoryPath);
 
     return 0;
