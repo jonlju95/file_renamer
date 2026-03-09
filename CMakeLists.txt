@@ -4,3 +4,4 @@ project(file_renamer)
 set(CMAKE_CXX_STANDARD 17)
 
 add_executable(file_renamer main.cpp)
+target_link_options(file_renamer PRIVATE -static)

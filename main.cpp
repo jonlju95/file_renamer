@@ -76,9 +76,14 @@ void processDirectory(const fs::path &dirPath) {
     }
 }
 
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "Usage: file_renamer <directory path>\n";
+        return 1;
+    }
+    const fs::path directoryPath = argv[1]; // Directory path
 
-int main() {
-    const fs::path directoryPath = ""; // Directory path
+    std::cout << "[INFO] " << argv[1] << "\n";
     processDirectory(directoryPath);
 
     return 0;
